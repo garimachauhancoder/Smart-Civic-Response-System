@@ -1,0 +1,26 @@
+# ==============================================================================
+# SMART CIVIC RESPONSE SYSTEM - REQUIREMENTS & DEPENDENCY SPECIFICATION
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Primary Java Runtime & Compiler Environment
+# ------------------------------------------------------------------------------
+# Java SE Development Kit: JDK 21+ or JDK 22+ (Installed: Oracle JDK 22.0.1)
+# Build Tool: Built-in javac zero-dependency compiler or Apache Maven 3.9+
+# Framework: Native High-Performance Java 22 HTTP & REST Server (jdk.httpserver)
+
+# ------------------------------------------------------------------------------
+# 2. Python Client & Automation Test Suite Requirements
+# (Used by test_civic_api.py and automated REST API validation scripts)
+# ------------------------------------------------------------------------------
+requests>=2.31.0
+urllib3>=2.0.0
+pytest>=7.4.0
+pydantic>=2.0.0
+
+# ------------------------------------------------------------------------------
+# 3. Frontend Web Client Stack
+# ------------------------------------------------------------------------------
+# Pure Modern Web Standards: HTML5, CSS3 Glassmorphism UI, Vanilla JavaScript (ES6+)
+# Maps & Geolocation: HTML5 Geolocation API & GIS Interactive Location Tracker
+# Design System: Google Fonts (Inter / Outfit), Lucide SVG Icons

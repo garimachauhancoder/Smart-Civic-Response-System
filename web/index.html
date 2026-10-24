@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Civic Response System | Municipal Governance & AI Triage Platform</title>
+  <meta name="description" content="AI-powered civic complaint reporting, automated municipal department dispatch, live SLA tracking, and citizen response platform.">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2306b6d4'><circle cx='12' cy='12' r='10'/></svg>">
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header class="top-nav">
+    <a href="#" class="nav-brand" id="navBrandHome">
+      <div class="brand-icon-wrap">
+        <span style="font-size: 1.35rem;">🏛️</span>
+        <div class="pulse-dot" title="Real-time Server Connected"></div>
+      </div>
+      <div class="brand-text">
+        <h1>CIVIC RESPONSE OS</h1>
+        <div class="brand-subtitle">
+          <span>Smart City Municipal Platform</span>
+          <span class="live-pill">● LIVE 2.0</span>
+        </div>
+      </div>
+    </a>
+
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs" role="tablist">
+      <button class="nav-tab-btn active" data-tab="citizen" id="tabCitizen">
+        <span>📝</span> Report & Track
+      </button>
+      <button class="nav-tab-btn" data-tab="feed" id="tabFeed">
+        <span>🌐</span> Live Feed & Map
+      </button>
+      <button class="nav-tab-btn" data-tab="admin" id="tabAdmin">
+        <span>⚡</span> Command Center
+      </button>
+      <button class="nav-tab-btn" data-tab="departments" id="tabDept">
+        <span>🏢</span> Departments
+      </button>
+    </nav>
+
+    <!-- Nav Actions -->
+    <div class="nav-actions">
+      <button class="btn-sos" id="btnEmergencySos" title="Fast-track Critical Hazard Incident">
+        <span>🚨</span> Emergency SOS
+      </button>
+    </div>
+  </header>
+
+  <!-- Hero Visual Banner -->
+  <section class="hero-banner">
+    <img src="assets/hero.jpg" alt="Smart City Operations Command Center" class="hero-bg-img" />
+    <div class="hero-gradient-overlay"></div>
+    <div class="hero-content">
+      <div class="hero-tag">
+        <span>⚡</span> Pure Java 22 Enterprise Core & REST API
+      </div>
+      <h2 class="hero-title">Next-Gen Municipal Governance & Instant Citizen Dispatch</h2>
+      <p class="hero-desc">
+        Empowering citizens to report urban infrastructure issues with automated Natural Language AI triage, precision GIS geo-location, department routing, and live SLA countdowns.
+      </p>
+      <div class="hero-stats-row">
+        <div class="hero-stat-badge">
+          <span>Total Incidents:</span>
+          <span class="hero-stat-val" id="heroTotalIssues">--</span>
+        </div>
+        <div class="hero-stat-badge">
+          <span>Resolution Rate:</span>
+          <span class="hero-stat-val" id="heroResolutionRate">--%</span>
+        </div>
+        <div class="hero-stat-badge">
+          <span>Avg Turnaround:</span>
+          <span class="hero-stat-val" id="heroAvgHours">--h</span>
+        </div>
+        <div class="hero-stat-badge">
+          <span>Active Alerts:</span>
+          <span class="hero-stat-val" id="heroSlaActive">--</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Main Application Body -->
+  <main class="main-content">
+
+    <!-- ==================================================================== -->
+    <!-- VIEW 1: CITIZEN PORTAL (REPORT & TRACK)                              -->
+    <!-- ==================================================================== -->
+    <section class="view-section" id="view-citizen">
+      <div class="citizen-grid">
+        
+        <!-- Left: Incident Reporting Form -->
+        <div class="glass-panel">
+          <div class="panel-header">
+            <div>
+              <h3 class="panel-title"><span>📢</span> Register Civic Incident</h3>
+              <p class="panel-desc">Submit urban maintenance requests directly to city engineers</p>
+            </div>
+            <!-- Quick Preset Samples -->
+            <div class="preset-sample-row">
+              <span style="font-size: 0.72rem; color: var(--text-dim);">Load Preset:</span>
+              <button class="btn-preset" data-sample="pothole">Pothole</button>
+              <button class="btn-preset" data-sample="water">Water Burst</button>
+              <button class="btn-preset" data-sample="garbage">Garbage</button>
+              <button class="btn-preset" data-sample="electric">Sparking Pole</button>
+            </div>
+          </div>
+
+          <form id="reportIssueForm" novalidate>
+            <!-- Title -->
+            <div class="form-group">
+              <label class="form-label" for="issueTitle">Incident Summary / Headline <span class="req">*</span></label>
+              <input type="text" id="issueTitle" class="form-control" placeholder="e.g. Broken water pipeline causing street flooding" required />
+            </div>
+
+            <!-- Description -->
+            <div class="form-group">
+              <label class="form-label" for="issueDescription">Detailed Description <span class="req">*</span></label>
+              <textarea id="issueDescription" class="form-control" placeholder="Describe the issue, landmarks, severity, and any immediate hazard..." required></textarea>
+            </div>
+
+            <!-- Live Smart AI Triage Assistant Card -->
+            <div class="ai-triage-card" id="aiTriageCard">
+              <div class="ai-triage-header">
+                <span class="ai-triage-badge">🤖 Smart AI Triage Engine</span>
+                <span style="font-size: 0.7rem; color: var(--text-dim);">Auto-analyzes as you type</span>
+              </div>
+              <div class="ai-triage-content">
+                <span class="ai-pill">Category: <strong id="aiTriageCat" style="color: var(--cyan-400);">ROADS</strong></span>
+                <span class="ai-pill">Urgency: <strong id="aiTriagePriority" style="color: var(--amber-400);">MEDIUM (35/100)</strong></span>
+                <span class="ai-pill">Dept: <strong id="aiTriageDept" style="color: #fff;">Roads Infrastructure</strong></span>
+                <span class="ai-pill">Target SLA: <strong id="aiTriageSla" style="color: var(--emerald-400);">48h SLA</strong></span>
+              </div>
+              <div style="font-size: 0.72rem; color: var(--text-dim); margin-top: 0.4rem;" id="aiTriageRationale">
+                NLP heuristic model active. Keyword patterns trigger routing and urgency calculation.
+              </div>
+            </div>
+
+            <!-- Category & Priority Row -->
+            <div class="form-row-2">
+              <div class="form-group">
+                <label class="form-label" for="issueCategory">Assigned Category</label>
+                <select id="issueCategory" class="form-control">
+                  <option value="AUTO" selected>Auto-Detect via AI Triage</option>
+                  <option value="ROADS">Roads & Highway Infrastructure</option>
+                  <option value="WATER_DRAINAGE">Water Supply & Sewerage Board</option>
+                  <option value="SANITATION">Solid Waste & Sanitation</option>
+                  <option value="ELECTRICITY">Public Lighting & Power Grid</option>
+                  <option value="PUBLIC_SAFETY">Public Safety & Disaster Relief</option>
+                  <option value="PARKS">Urban Parks & Greenery</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="issuePriority">Assessed Urgency Level</label>
+                <select id="issuePriority" class="form-control">
+                  <option value="AUTO" selected>Auto-Calculate via Urgency Score</option>
+                  <option value="CRITICAL">Critical (12h SLA - Emergency Hazard)</option>
+                  <option value="HIGH">High (24h SLA - Major Inconvenience)</option>
+                  <option value="MEDIUM">Medium (48h SLA - Standard Repair)</option>
+                  <option value="LOW">Low (72h SLA - Routine Maintenance)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Location & Ward -->
+            <div class="form-row-2">
+              <div class="form-group">
+                <label class="form-label" for="issueAddress">Street Address / Landmark <span class="req">*</span></label>
+                <div class="location-row">
+                  <input type="text" id="issueAddress" class="form-control" placeholder="e.g. 5th Crossroad, near Metro Pillar 88" required />
+                  <button type="button" class="btn-locate" id="btnDetectGps" title="Detect Current GPS Location">
+                    <span>📍</span> Detect GPS
+                  </button>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="issueWard">Municipal Ward</label>
+                <select id="issueWard" class="form-control">
+                  <option value="Ward 12 - Midtown Sector" selected>Ward 12 - Midtown Sector</option>
+                  <option value="Ward 7 - North Enclave">Ward 7 - North Enclave</option>
+                  <option value="Ward 15 - West Market">Ward 15 - West Market</option>
+                  <option value="Ward 4 - East Colony">Ward 4 - East Colony</option>
+                  <option value="Ward 9 - South Green">Ward 9 - South Green</option>
+                  <option value="Ward 11 - Garden Town">Ward 11 - Garden Town</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Interactive Mini GIS Pin-Drop Map -->
+            <div class="form-group">
+              <label class="form-label">Precision GIS Geotag (Click anywhere to place pin)</label>
+              <div class="mini-map-picker" id="miniMapPicker" title="Click on map to drop precise incident coordinates">
+                <div class="mini-map-pin" id="miniMapPin" style="left: 50%; top: 50%;"></div>
+                <div class="mini-map-coords" id="miniMapCoords">GPS: 28.6139, 77.2090</div>
+              </div>
+              <input type="hidden" id="issueLatitude" value="28.6139">
+              <input type="hidden" id="issueLongitude" value="77.2090">
+            </div>
+
+            <!-- Photo Upload Area -->
+            <div class="form-group">
+              <label class="form-label">Attach Incident Photo (Camera or Upload)</label>
+              <div class="dropzone-box" id="photoDropzone">
+                <div class="dropzone-icon">📷</div>
+                <div class="dropzone-text">
+                  <strong>Click to browse</strong> or drag & drop evidence photo here
+                </div>
+                <div style="font-size: 0.72rem; color: var(--text-dim); margin-top: 0.25rem;">Supports JPG, PNG, WebP</div>
+                <input type="file" id="photoFileInput" accept="image/*" style="display: none;" />
+              </div>
+              <div class="photo-preview-wrap" id="photoPreviewWrap">
+                <img src="" id="photoPreviewImg" class="photo-preview-img" alt="Selected incident photo preview" />
+                <button type="button" class="btn-remove-photo" id="btnRemovePhoto" title="Remove photo">✕</button>
+              </div>
+            </div>
+
+            <!-- Citizen Reporter Info -->
+            <div class="form-row-2">
+              <div class="form-group">
+                <label class="form-label" for="reporterName">Citizen Name</label>
+                <input type="text" id="reporterName" class="form-control" placeholder="Your name (or anonymous)" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="reporterPhone">Phone / WhatsApp</label>
+                <input type="tel" id="reporterPhone" class="form-control" placeholder="+91 98000 00000 (for SMS updates)" />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="reporterEmail">Email Notification (Optional)</label>
+              <input type="email" id="reporterEmail" class="form-control" placeholder="citizen@example.com" />
+            </div>
+
+            <!-- Submit -->
+            <button type="submit" class="btn-submit-issue" id="btnSubmitIssue">
+              <span>🚀</span> Register Civic Issue & Dispatch
+            </button>
+          </form>
+        </div>
+
+        <!-- Right: Live Ticket Tracker -->
+        <div class="glass-panel">
+          <div class="panel-header">
+            <div>
+              <h3 class="panel-title"><span>🔍</span> Live Incident Tracker</h3>
+              <p class="panel-desc">Verify resolution stages, nodal officers, and field updates</p>
+            </div>
+          </div>
+
+          <!-- Search Tracker Bar -->
+          <div class="search-track-bar">
+            <input type="text" id="trackIssueIdInput" class="form-control" placeholder="Enter Ticket ID (e.g. CIV-2026-1001)" />
+            <button class="btn-track" id="btnTrackSearch">Track</button>
+          </div>
+
+          <!-- Quick picks -->
+          <div class="quick-picks-label">Recent Incident Quick-Tracker:</div>
+          <div class="quick-picks-row" id="quickPicksRow">
+            <button class="quick-pick-btn" onclick="App.trackIssueFromFeed('CIV-2026-1001')">CIV-2026-1001</button>
+            <button class="quick-pick-btn" onclick="App.trackIssueFromFeed('CIV-2026-1002')">CIV-2026-1002</button>
+            <button class="quick-pick-btn" onclick="App.trackIssueFromFeed('CIV-2026-1004')">CIV-2026-1004</button>
+          </div>
+
+          <!-- Dynamic Tracker Results Container -->
+          <div id="trackerResultsContainer">
+            <p class="panel-desc" style="text-align: center; padding: 3rem 0; color: var(--text-dim);">
+              Enter a Ticket ID above or select a recent issue to view real-time resolution timeline.
+            </p>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ==================================================================== -->
+    <!-- VIEW 2: COMMUNITY LIVE FEED & GIS RADAR                              -->
+    <!-- ==================================================================== -->
+    <section class="view-section" id="view-feed" style="display: none;">
+      
+      <!-- Filter Toolbar -->
+      <div class="filter-toolbar">
+        <div class="filter-pills-group">
+          <button class="filter-pill cat-filter-pill active" data-cat="ALL">All Categories</button>
+          <button class="filter-pill cat-filter-pill" data-cat="ROADS">Roads</button>
+          <button class="filter-pill cat-filter-pill" data-cat="WATER_DRAINAGE">Water & Drainage</button>
+          <button class="filter-pill cat-filter-pill" data-cat="SANITATION">Sanitation</button>
+          <button class="filter-pill cat-filter-pill" data-cat="ELECTRICITY">Electricity</button>
+          <button class="filter-pill cat-filter-pill" data-cat="PUBLIC_SAFETY">Public Safety</button>
+          <button class="filter-pill cat-filter-pill" data-cat="PARKS">Parks</button>
+        </div>
+
+        <div class="filter-pills-group">
+          <button class="filter-pill status-filter-pill active" data-status="ALL">All Status</button>
+          <button class="filter-pill status-filter-pill" data-status="REPORTED">Reported</button>
+          <button class="filter-pill status-filter-pill" data-status="IN_PROGRESS">In Progress</button>
+          <button class="filter-pill status-filter-pill" data-status="RESOLVED">Resolved</button>
+        </div>
+
+        <div class="search-box-wrap">
+          <span>🔍</span>
+          <input type="text" id="feedSearchInput" class="form-control" placeholder="Search keywords, wards..." />
+        </div>
+      </div>
+
+      <!-- City GIS Radar Visualization Bar -->
+      <div class="glass-panel" style="margin-bottom: 2rem; position: relative; overflow: hidden; min-height: 180px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <div>
+            <h4 style="color: #fff; font-size: 1.05rem;">🛰️ City GIS Sector Radar</h4>
+            <div style="font-size: 0.78rem; color: var(--text-dim);">Live geographic incident concentration across municipal wards</div>
+          </div>
+          <div style="display: flex; gap: 0.85rem; font-size: 0.75rem;">
+            <span style="color: var(--rose-400);">● Critical</span>
+            <span style="color: var(--amber-400);">● High</span>
+            <span style="color: var(--cyan-400);">● Standard</span>
+          </div>
+        </div>
+        <div id="gisRadarPins" style="position: relative; height: 120px; width: 100%; background: radial-gradient(circle, rgba(6,182,212,0.06) 0%, rgba(15,23,42,0.8) 70%); border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+          <!-- Plotted dynamically -->
+        </div>
+      </div>
+
+      <!-- Issues Feed Cards Grid -->
+      <div class="issues-grid" id="issuesFeedContainer">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- ==================================================================== -->
+    <!-- VIEW 3: MUNICIPAL ADMIN COMMAND CENTER                               -->
+    <!-- ==================================================================== -->
+    <section class="view-section" id="view-admin" style="display: none;">
+      
+      <!-- Real-Time Municipal KPIs -->
+      <div class="kpi-row">
+        <div class="kpi-card kpi-total">
+          <div class="kpi-icon-wrap">📋</div>
+          <div>
+            <div class="kpi-val" id="kpiTotalIssues">--</div>
+            <div class="kpi-label">Total Complaints Logged</div>
+          </div>
+        </div>
+
+        <div class="kpi-card kpi-pending">
+          <div class="kpi-icon-wrap">⏳</div>
+          <div>
+            <div class="kpi-val" id="kpiPendingIssues">--</div>
+            <div class="kpi-label">Active / Pending Triage</div>
+          </div>
+        </div>
+
+        <div class="kpi-card kpi-progress">
+          <div class="kpi-icon-wrap">🚜</div>
+          <div>
+            <div class="kpi-val" id="kpiInProgress">--</div>
+            <div class="kpi-label">Field Units In Action</div>
+          </div>
+        </div>
+
+        <div class="kpi-card kpi-resolved">
+          <div class="kpi-icon-wrap">✅</div>
+          <div>
+            <div class="kpi-val" id="kpiResolvedIssues">--</div>
+            <div class="kpi-label">Successfully Resolved</div>
+          </div>
+        </div>
+
+        <div class="kpi-card kpi-breached">
+          <div class="kpi-icon-wrap">🚨</div>
+          <div>
+            <div class="kpi-val" id="kpiBreachedIssues">--</div>
+            <div class="kpi-label">SLA Breaches Alert</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Admin Management Table Panel -->
+      <div class="glass-panel">
+        <div class="panel-header">
+          <div>
+            <h3 class="panel-title"><span>⚡</span> Municipal Operations & Dispatch Board</h3>
+            <p class="panel-desc">Real-time status updater, officer assignments, and resolution audits</p>
+          </div>
+          <button class="btn-card-action" id="btnRefreshAdmin">
+            <span>🔄</span> Refresh Registry
+          </button>
+        </div>
+
+        <div class="table-responsive">
+          <table class="civic-table">
+            <thead>
+              <tr>
+                <th>Ticket ID</th>
+                <th>Incident Details & Ward</th>
+                <th>Priority</th>
+                <th>Department</th>
+                <th>SLA Clock</th>
+                <th>Status Stage</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="adminIssuesTableBody">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================================================================== -->
+    <!-- VIEW 4: DEPARTMENT NETWORK DIRECTORY                                 -->
+    <!-- ==================================================================== -->
+    <section class="view-section" id="view-departments" style="display: none;">
+      <div class="glass-panel" style="margin-bottom: 2rem;">
+        <div class="panel-header">
+          <div>
+            <h3 class="panel-title"><span>🏢</span> Municipal Departmental Network</h3>
+            <p class="panel-desc">Direct nodal agency contacts, field officer strength, and active backlogs</p>
+          </div>
+        </div>
+        <div class="dept-grid" id="departmentsGrid">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Ticket Management Modal -->
+  <div class="modal-backdrop" id="manageTicketModal">
+    <div class="modal-dialog">
+      <button class="modal-close-btn" onclick="App.closeModals()">✕</button>
+      <div id="manageModalBody">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Stack -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Footer -->
+  <footer class="app-footer">
+    <div class="footer-links">
+      <a href="/api/health" target="_blank">API Health</a>
+      <a href="/api/issues" target="_blank">REST API Endpoint</a>
+      <a href="/api/stats" target="_blank">Analytics JSON</a>
+      <a href="/api/departments" target="_blank">Departments API</a>
+    </div>
+    <div>Smart Civic Response System &copy; 2026. Built with Pure Java 22 HTTP Server, REST APIs & Vanilla Modern Web.</div>
+  </footer>
+
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
