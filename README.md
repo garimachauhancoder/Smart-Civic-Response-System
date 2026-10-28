@@ -121,13 +121,19 @@ java -cp bin com.civic.Main
 | `GET` | `/api/health` | Service health status and uptime verification |
 | `GET` | `/api/stats` | Real-time municipal KPIs, SLA breaches, resolution rate |
 | `GET` | `/api/issues` | Query issues with optional filters (`category`, `status`, `priority`, `q`) |
-| `POST` | `/api/issues` | Register a new civic complaint with automated AI triage |
+| `POST` | `/api/issues` | Register a complaint with automated AI triage; accepts JSON or multipart form data with an optional `photo` image (10 MB maximum) |
 | `GET` | `/api/issues/{id}` | Detailed ticket view including complete progress timeline |
 | `PUT` | `/api/issues/{id}/status` | Transition issue status (`IN_PROGRESS`, `RESOLVED`), assign officer |
 | `PUT` | `/api/issues/{id}/assign` | Reassign issue to a different municipal department |
 | `POST` | `/api/issues/{id}/upvote` | Community citizen endorsement (+1 vote and priority escalation) |
 | `POST` | `/api/triage` | AI text triage analysis returning predicted category & SLA |
 | `GET` | `/api/departments` | Directory of municipal departments and active officer loads |
+| `GET` | `/api/reports/export` | Download ward-level resolved and pending counts as CSV |
+| `GET` | `/api/officer/issues?ward=Ward%2012%20-%20Midtown%20Sector` | List active issues for the selected field ward |
+
+New complaints within 50 m of an active issue in the same category are treated as endorsements of that existing ticket. JSON persistence uses synchronized repository operations and atomic file replacement. Dynamic severity uses category weights plus 0.5 per upvote and 0.2 per issue age hour; priority only moves upward automatically. Resolving a ticket requires a JPEG, PNG, or WebP after-resolution photo.
+
+Multipart photos are stored under `uploads/` and served from `/uploads/{generated-file-name}`. JPEG EXIF GPS is checked against the submitted latitude and longitude; missing GPS or a distance over 1 km sets `fraudFlag` and `fraudReason` for review. This is a review signal, not proof of fraud. A background worker scans every 10 minutes and changes overdue `PENDING`, `REPORTED`, `TRIAGED`, or `IN_PROGRESS` issues to `ESCALATED` after their configured SLA, adding a timeline audit event.
 
 ---
 
@@ -138,3 +144,4 @@ A Python test suite is provided in `test_civic_api.py` that exercises the endpoi
 python test_civic_api.py
 ```
 *(Dependencies are documented in `requirements.txt`).*
+

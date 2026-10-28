@@ -15,6 +15,8 @@ import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.AtomicMoveNotSupportedException;
 
 public class IssueRepository {
 
@@ -127,7 +129,18 @@ public class IssueRepository {
             }
             List<CivicIssue> all = getAll();
             String json = SimpleJson.toJson(all);
-            Files.writeString(storagePath, json, StandardCharsets.UTF_8);
+            Path parent = storagePath.toAbsolutePath().getParent();
+            Path temp = Files.createTempFile(parent, storagePath.getFileName().toString(), ".tmp");
+            try {
+                Files.writeString(temp, json, StandardCharsets.UTF_8);
+                try {
+                    Files.move(temp, storagePath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                } catch (AtomicMoveNotSupportedException e) {
+                    Files.move(temp, storagePath, StandardCopyOption.REPLACE_EXISTING);
+                }
+            } finally {
+                Files.deleteIfExists(temp);
+            }
         } catch (IOException e) {
             System.err.println("[IssueRepository] Failed to persist data: " + e.getMessage());
         }
@@ -308,6 +321,8 @@ public class IssueRepository {
         issue.setReporterEmail(getString(map, "reporterEmail"));
         issue.setPhotoUrl(getString(map, "photoUrl"));
         issue.setResolutionPhotoUrl(getString(map, "resolutionPhotoUrl"));
+        issue.setFraudFlag(Boolean.TRUE.equals(map.get("fraudFlag")));
+        issue.setFraudReason(getString(map, "fraudReason"));
         issue.setUpvotes(getInt(map, "upvotes"));
         issue.setCreatedAt(getString(map, "createdAt"));
         issue.setUpdatedAt(getString(map, "updatedAt"));

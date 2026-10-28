@@ -7,6 +7,7 @@ const CivicApi = {
 
   async request(endpoint, options = {}) {
     const url = `${this.baseUrl}${endpoint}`;
+    const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
     const defaultHeaders = {
       'Content-Type': 'application/json',
       'Accept': 'application/json'
@@ -20,7 +21,9 @@ const CivicApi = {
       }
     };
 
-    if (config.body && typeof config.body === 'object') {
+    if (isFormData) {
+      delete config.headers['Content-Type'];
+    } else if (config.body && typeof config.body === 'object') {
       config.body = JSON.stringify(config.body);
     }
 
@@ -56,6 +59,10 @@ const CivicApi = {
 
   async getDepartments() {
     return this.request('/departments');
+  },
+
+  async getOfficerIssues(ward = 'ALL') {
+    return this.request(`/officer/issues?ward=${encodeURIComponent(ward)}`);
   },
 
   async triage(title, description) {

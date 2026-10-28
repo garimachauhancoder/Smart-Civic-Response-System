@@ -6,6 +6,7 @@
   <title>Smart Civic Response System | Municipal Governance & AI Triage Platform</title>
   <meta name="description" content="AI-powered civic complaint reporting, automated municipal department dispatch, live SLA tracking, and citizen response platform.">
   <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2306b6d4'><circle cx='12' cy='12' r='10'/></svg>">
 </head>
 <body>
@@ -37,6 +38,8 @@
       <button class="nav-tab-btn" data-tab="admin" id="tabAdmin">
         <span>⚡</span> Command Center
       </button>
+      <button class="nav-tab-btn" data-tab="tracking" id="tabTracking">Track Ticket</button>
+      <button class="nav-tab-btn" data-tab="officer" id="tabOfficer">Field Officer</button>
       <button class="nav-tab-btn" data-tab="departments" id="tabDept">
         <span>🏢</span> Departments
       </button>
@@ -278,6 +281,14 @@
     </section>
 
     <!-- ==================================================================== -->
+    <section class="view-section" id="view-tracking" style="display: none;">
+      <div class="glass-panel" style="max-width: 1000px; margin: 0 auto;">
+        <div class="panel-header"><div><h3 class="panel-title">Citizen Ticket Tracking</h3><p class="panel-desc">Enter your ticket ID to see its submitted, assigned, in-progress, and resolved stages.</p></div></div>
+        <div class="search-track-bar"><input type="text" id="trackPageIssueIdInput" class="form-control" placeholder="Enter Ticket ID (e.g. CIV-2026-1001)" /><button class="btn-track" id="btnTrackPageSearch">Track ticket</button></div>
+        <div id="trackerPageResultsContainer"><p class="panel-desc" style="text-align:center;padding:3rem 0;color:var(--text-dim);">Enter your ticket ID above to view its live resolution timeline.</p></div>
+      </div>
+    </section>
+
     <!-- VIEW 2: COMMUNITY LIVE FEED & GIS RADAR                              -->
     <!-- ==================================================================== -->
     <section class="view-section" id="view-feed" style="display: none;">
@@ -298,6 +309,7 @@
           <button class="filter-pill status-filter-pill active" data-status="ALL">All Status</button>
           <button class="filter-pill status-filter-pill" data-status="REPORTED">Reported</button>
           <button class="filter-pill status-filter-pill" data-status="IN_PROGRESS">In Progress</button>
+          <button class="filter-pill status-filter-pill" data-status="ESCALATED">Escalated</button>
           <button class="filter-pill status-filter-pill" data-status="RESOLVED">Resolved</button>
         </div>
 
@@ -320,9 +332,7 @@
             <span style="color: var(--cyan-400);">● Standard</span>
           </div>
         </div>
-        <div id="gisRadarPins" style="position: relative; height: 120px; width: 100%; background: radial-gradient(circle, rgba(6,182,212,0.06) 0%, rgba(15,23,42,0.8) 70%); border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
-          <!-- Plotted dynamically -->
-        </div>
+        <div id="gisRadarPins" style="height: 360px; width: 100%; border-radius: var(--radius-md); border: 1px solid var(--border-subtle); overflow: hidden;"></div>
       </div>
 
       <!-- Issues Feed Cards Grid -->
@@ -389,6 +399,7 @@
           <button class="btn-card-action" id="btnRefreshAdmin">
             <span>🔄</span> Refresh Registry
           </button>
+          <a class="btn-card-action" href="/api/reports/export">Download Ward CSV</a>
         </div>
 
         <div class="table-responsive">
@@ -413,6 +424,19 @@
     </section>
 
     <!-- ==================================================================== -->
+    <section class="view-section" id="view-officer" style="display: none;">
+      <div class="glass-panel">
+        <div class="panel-header">
+          <div><h3 class="panel-title">Field Officer Tasks</h3><p class="panel-desc">Active ward assignments. Attach an after-resolution photo to complete a ticket.</p></div>
+          <select id="officerWardSelect" class="form-control" aria-label="Filter by ward">
+            <option value="ALL">All wards</option><option>Ward 12 - Midtown Sector</option><option>Ward 7 - North Enclave</option>
+            <option>Ward 15 - West Market</option><option>Ward 4 - East Colony</option><option>Ward 9 - South Green</option><option>Ward 11 - Garden Town</option>
+          </select>
+        </div>
+        <div id="officerTasksContainer" class="issues-grid"></div>
+      </div>
+    </section>
+
     <!-- VIEW 4: DEPARTMENT NETWORK DIRECTORY                                 -->
     <!-- ==================================================================== -->
     <section class="view-section" id="view-departments" style="display: none;">
@@ -455,6 +479,8 @@
     <div>Smart Civic Response System &copy; 2026. Built with Pure Java 22 HTTP Server, REST APIs & Vanilla Modern Web.</div>
   </footer>
 
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
   <script src="js/api.js"></script>
   <script src="js/app.js"></script>
 </body>

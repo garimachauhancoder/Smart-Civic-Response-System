@@ -2,10 +2,12 @@ package com.civic.model;
 
 public enum IssueStatus {
     REPORTED("Reported", "Issue logged by citizen into civic registry", 1),
+    PENDING("Pending", "Issue awaiting municipal action", 1),
     TRIAGED("Triaged", "Issue reviewed and assigned to nodal department", 2),
     IN_PROGRESS("In Progress", "Field team dispatched and work underway", 3),
     RESOLVED("Resolved", "Repair or civic maintenance work successfully completed", 4),
-    CLOSED("Closed", "Citizen satisfaction verified and ticket closed", 5);
+    CLOSED("Closed", "Citizen satisfaction verified and ticket closed", 5),
+    ESCALATED("Escalated", "SLA breached and issue automatically escalated", 6);
 
     private final String label;
     private final String description;

@@ -103,6 +103,8 @@ public class SimpleJson {
         sb.append("\"reporterEmail\":").append(toJson(issue.getReporterEmail())).append(",");
         sb.append("\"photoUrl\":").append(toJson(issue.getPhotoUrl())).append(",");
         sb.append("\"resolutionPhotoUrl\":").append(toJson(issue.getResolutionPhotoUrl())).append(",");
+        sb.append("\"fraudFlag\":").append(issue.isFraudFlag()).append(",");
+        sb.append("\"fraudReason\":").append(toJson(issue.getFraudReason())).append(",");
         sb.append("\"upvotes\":").append(issue.getUpvotes()).append(",");
         sb.append("\"createdAt\":").append(toJson(issue.getCreatedAt())).append(",");
         sb.append("\"updatedAt\":").append(toJson(issue.getUpdatedAt())).append(",");

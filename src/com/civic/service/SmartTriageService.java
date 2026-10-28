@@ -6,12 +6,28 @@ import java.util.*;
 
 public class SmartTriageService {
 
+    private static final Map<String, Double> CATEGORY_WEIGHTS = Map.of(
+            "PUBLIC_SAFETY", 55.0, "WATER_DRAINAGE", 45.0, "ELECTRICITY", 40.0,
+            "ROADS", 30.0, "SANITATION", 25.0, "PARKS", 15.0);
+
+    public double dynamicSeverityScore(String category, int upvotes, double ageHours) {
+        return CATEGORY_WEIGHTS.getOrDefault(category, 20.0) + Math.max(0, upvotes) * 0.5 + Math.max(0, ageHours) * 0.2;
+    }
+
+    public PriorityLevel priorityForScore(double score) {
+        if (score >= 80) return PriorityLevel.CRITICAL;
+        if (score >= 60) return PriorityLevel.HIGH;
+        if (score >= 35) return PriorityLevel.MEDIUM;
+        return PriorityLevel.LOW;
+    }
+
     public static class TriageResult {
         public String category;
         public String department;
         public PriorityLevel priority;
         public int slaHours;
         public int urgencyScore; // 0 - 100
+        public double dynamicSeverityScore;
         public List<String> detectedKeywords = new ArrayList<>();
         public String rationale;
 
@@ -24,6 +40,7 @@ public class SmartTriageService {
             map.put("priorityColor", priority.getColorCode());
             map.put("slaHours", slaHours);
             map.put("urgencyScore", urgencyScore);
+            map.put("dynamicSeverityScore", dynamicSeverityScore);
             map.put("detectedKeywords", detectedKeywords);
             map.put("rationale", rationale);
             return map;
@@ -143,6 +160,9 @@ public class SmartTriageService {
             priority = PriorityLevel.LOW;
         }
 
+        PriorityLevel scorePriority = priorityForScore(dynamicSeverityScore(bestCategory, 0, 0));
+        if (severityRank(scorePriority) > severityRank(priority)) priority = scorePriority;
+
         // Map category to Department
         String department;
         switch (bestCategory) {
@@ -174,9 +194,20 @@ public class SmartTriageService {
         result.slaHours = priority.getSlaHours();
         result.urgencyScore = urgencyScore;
         result.detectedKeywords = matchedKeywords;
-        result.rationale = String.format("Auto-classified into %s based on %d civic trigger keywords. Urgency assessed at %d/100 (SLA: %dh).",
-                bestCategory, matchedKeywords.size(), urgencyScore, priority.getSlaHours());
+        double severityScore = dynamicSeverityScore(bestCategory, 0, 0);
+        result.dynamicSeverityScore = severityScore;
+        result.rationale = String.format("Auto-classified into %s using %d trigger keywords and dynamic severity score %.1f (SLA: %dh).",
+                bestCategory, matchedKeywords.size(), severityScore, priority.getSlaHours());
 
         return result;
+    }
+
+    private int severityRank(PriorityLevel priority) {
+        switch (priority) {
+            case CRITICAL: return 4;
+            case HIGH: return 3;
+            case MEDIUM: return 2;
+            default: return 1;
+        }
     }
 }

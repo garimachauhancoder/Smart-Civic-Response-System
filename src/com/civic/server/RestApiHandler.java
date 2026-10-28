@@ -13,13 +13,20 @@ import java.io.InputStreamReader;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.nio.file.Path;
 
 public class RestApiHandler implements HttpHandler {
 
     private final CivicIssueService issueService;
+    private final Path uploadDir;
 
     public RestApiHandler(CivicIssueService issueService) {
+        this(issueService, Path.of("uploads"));
+    }
+
+    public RestApiHandler(CivicIssueService issueService, Path uploadDir) {
         this.issueService = issueService;
+        this.uploadDir = uploadDir;
     }
 
     @Override
@@ -38,6 +45,12 @@ public class RestApiHandler implements HttpHandler {
                 handleStats(exchange);
             } else if (path.equals("/api/departments") && method.equals("GET")) {
                 handleDepartments(exchange);
+            } else if (path.equals("/api/reports/export") && method.equals("GET")) {
+                handleReportExport(exchange);
+            } else if (path.equals("/api/officer/issues") && method.equals("GET")) {
+                issueService.refreshDynamicSeverity();
+                String ward = parseQueryParams(exchange.getRequestURI().getQuery()).get("ward");
+                CorsHelper.sendJsonResponse(exchange, 200, SimpleJson.toJson(issueService.getIssuesForWard(ward)));
             } else if (path.equals("/api/triage") && method.equals("POST")) {
                 handleTriage(exchange);
             } else if (path.equals("/api/issues") || path.equals("/api/issues/")) {
@@ -55,7 +68,8 @@ public class RestApiHandler implements HttpHandler {
             }
         } catch (Exception e) {
             e.printStackTrace();
-            CorsHelper.sendJsonResponse(exchange, 500, "{\"error\":\"Internal Server Error: " + SimpleJson.escapeString(e.getMessage()) + "\"}");
+            int status = e instanceof IllegalArgumentException ? 400 : 500;
+            CorsHelper.sendJsonResponse(exchange, status, "{\"error\":\"" + SimpleJson.escapeString(e.getMessage()) + "\"}");
         }
     }
 
@@ -70,6 +84,7 @@ public class RestApiHandler implements HttpHandler {
     }
 
     private void handleStats(HttpExchange exchange) throws IOException {
+        issueService.refreshDynamicSeverity();
         Map<String, Object> stats = issueService.getStatistics();
         CorsHelper.sendJsonResponse(exchange, 200, SimpleJson.toJson(stats));
     }
@@ -90,6 +105,7 @@ public class RestApiHandler implements HttpHandler {
     }
 
     private void handleListIssues(HttpExchange exchange) throws IOException {
+        issueService.refreshDynamicSeverity();
         Map<String, String> queryParams = parseQueryParams(exchange.getRequestURI().getQuery());
         String category = queryParams.get("category");
         String status = queryParams.get("status");
@@ -101,16 +117,66 @@ public class RestApiHandler implements HttpHandler {
     }
 
     private void handleCreateIssue(HttpExchange exchange) throws IOException {
-        String body = readBody(exchange);
-        Map<String, Object> payload = SimpleJson.parseObject(body);
+        String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
+        Map<String, Object> payload;
+        if (contentType != null && contentType.toLowerCase(Locale.ROOT).startsWith("multipart/form-data")) {
+            payload = MultipartIssueParser.parse(exchange, uploadDir);
+            for (String key : List.of("latitude", "longitude")) {
+                Object value = payload.get(key);
+                if (value instanceof String) {
+                    try { payload.put(key, Double.parseDouble((String) value)); }
+                    catch (NumberFormatException e) { throw new IllegalArgumentException("Invalid " + key); }
+                }
+            }
+        } else {
+            String body = readBody(exchange);
+            payload = SimpleJson.parseObject(body);
+        }
 
         if (payload == null || !payload.containsKey("title")) {
             CorsHelper.sendJsonResponse(exchange, 400, "{\"error\":\"Missing required field: title\"}");
             return;
         }
 
-        CivicIssue created = issueService.createIssue(payload);
-        CorsHelper.sendJsonResponse(exchange, 201, SimpleJson.toJson(created));
+        CivicIssueService.IssueCreationResult result = issueService.createIssueWithResult(payload);
+        if (result.duplicate) {
+            String uploaded = payload.get("photoUrl") instanceof String ? (String) payload.get("photoUrl") : null;
+            if (uploaded != null && uploaded.startsWith("/uploads/")) {
+                String filename = uploaded.substring("/uploads/".length());
+                if (filename.matches("[a-f0-9-]{36}\\.(jpg|png|webp)")) {
+                    try { java.nio.file.Files.deleteIfExists(uploadDir.toAbsolutePath().normalize().resolve(filename)); }
+                    catch (IOException ignored) { }
+                }
+            }
+            Map<String, Object> response = new LinkedHashMap<>();
+            response.put("duplicateDetected", true);
+            response.put("message", "A matching active issue was found within 50 meters; its endorsement count was increased.");
+            response.put("issue", result.issue);
+            CorsHelper.sendJsonResponse(exchange, 200, SimpleJson.toJson(response));
+        } else {
+            CorsHelper.sendJsonResponse(exchange, 201, SimpleJson.toJson(result.issue));
+        }
+    }
+
+    private void handleReportExport(HttpExchange exchange) throws IOException {
+        StringBuilder csv = new StringBuilder("Ward,Total Resolved,Pending Count\r\n");
+        for (Map<String, Object> row : issueService.getWardReport()) {
+            csv.append(csvCell(row.get("ward"))).append(',')
+                    .append(row.get("totalResolved")).append(',')
+                    .append(row.get("pendingCount")).append("\r\n");
+        }
+        byte[] bytes = csv.toString().getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().set("Content-Type", "text/csv; charset=UTF-8");
+        exchange.getResponseHeaders().set("Content-Disposition", "attachment; filename=municipal-ward-report.csv");
+        CorsHelper.enableCors(exchange);
+        exchange.sendResponseHeaders(200, bytes.length);
+        try (var out = exchange.getResponseBody()) { out.write(bytes); }
+    }
+
+    private String csvCell(Object value) {
+        String text = value == null ? "" : value.toString();
+        if (!text.isEmpty() && "=+-@".indexOf(text.charAt(0)) >= 0) text = "'" + text;
+        return "\"" + text.replace("\"", "\"\"") + "\"";
     }
 
     private void handleSpecificIssue(HttpExchange exchange, String path, String method) throws IOException {
@@ -141,8 +207,14 @@ public class RestApiHandler implements HttpHandler {
 
         String action = parts[1];
         if (action.equals("status") && (method.equals("PUT") || method.equals("POST"))) {
-            String body = readBody(exchange);
-            Map<String, Object> payload = SimpleJson.parseObject(body);
+            String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
+            Map<String, Object> payload;
+            if (contentType != null && contentType.toLowerCase(Locale.ROOT).startsWith("multipart/form-data")) {
+                payload = MultipartIssueParser.parse(exchange, uploadDir);
+                if (payload.get("photoUrl") != null) payload.put("resolutionPhotoUrl", payload.get("photoUrl"));
+            } else {
+                payload = SimpleJson.parseObject(readBody(exchange));
+            }
             String status = (String) payload.get("status");
             String actor = (String) payload.get("actor");
             String notes = (String) payload.get("notes");

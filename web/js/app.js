@@ -18,12 +18,14 @@ const App = {
     q: ''
   },
   photoBase64: null,
+  selectedPhotoFile: null,
 
   init() {
     this.bindNavigation();
     this.bindCitizenForm();
     this.bindLiveFeedFilters();
     this.bindAdminTable();
+    this.bindOfficerDashboard();
     this.bindLocationPicker();
     this.bindTrackerSearch();
     this.bindPresetSamples();
@@ -77,11 +79,14 @@ const App = {
     });
 
     if (tabId === 'feed') {
+      this.renderGisRadarPins(this.issues);
       this.loadLiveFeed();
     } else if (tabId === 'admin') {
       this.loadAdminDashboard();
     } else if (tabId === 'departments') {
       this.loadDepartments();
+    } else if (tabId === 'officer') {
+      this.loadOfficerTasks();
     }
   },
 
@@ -193,13 +198,14 @@ const App = {
       this.showToast('Please upload a valid image file (PNG, JPG, WebP)', 'error');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      this.photoBase64 = e.target.result;
-      this.showPhotoPreview(this.photoBase64);
-      this.showToast('Photo attached to complaint', 'info');
-    };
-    reader.readAsDataURL(file);
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      this.showToast('Please upload a JPEG, PNG, or WebP image.', 'error');
+      return;
+    }
+    this.selectedPhotoFile = file;
+    this.photoBase64 = URL.createObjectURL(file);
+    this.showPhotoPreview(this.photoBase64);
+    this.showToast('Photo attached to complaint', 'info');
   },
 
   showPhotoPreview(url) {
@@ -212,7 +218,9 @@ const App = {
   },
 
   clearPhoto() {
+    if (this.photoBase64 && this.photoBase64.startsWith('blob:')) URL.revokeObjectURL(this.photoBase64);
     this.photoBase64 = null;
+    this.selectedPhotoFile = null;
     const wrap = document.getElementById('photoPreviewWrap');
     const img = document.getElementById('photoPreviewImg');
     const fileInput = document.getElementById('photoFileInput');
@@ -428,11 +436,29 @@ const App = {
       reporterName: name || 'Citizen Resident',
       reporterPhone: phone || '+91 98000 00000',
       reporterEmail: email,
-      photoUrl: this.photoBase64 || 'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?auto=format&fit=crop&w=800&q=80'
+      photoUrl: this.selectedPhotoFile ? null : (this.photoBase64 || 'https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?auto=format&fit=crop&w=800&q=80')
     };
 
     try {
-      const created = await CivicApi.createIssue(payload);
+      let submission = payload;
+      if (this.selectedPhotoFile) {
+        submission = new FormData();
+        Object.entries(payload).forEach(([key, value]) => {
+          if (value !== null && value !== undefined) submission.append(key, String(value));
+        });
+        submission.append('photo', this.selectedPhotoFile);
+      }
+      const response = await CivicApi.createIssue(submission);
+      if (response.duplicateDetected) {
+        const created = response.issue;
+        this.showToast(`Nearby duplicate found. ${created.id} received your endorsement.`, 'info');
+        document.getElementById('reportIssueForm').reset();
+        this.clearPhoto();
+        await this.refreshAllData();
+        this.renderTrackerIssue(created);
+        return;
+      }
+      const created = response;
       this.showToast(`Issue Registered: ${created.id}`, 'success');
 
       // Reset Form
@@ -457,42 +483,30 @@ const App = {
   // Tracker View & Search
   // --------------------------------------------------------------------------
   bindTrackerSearch() {
-    const trackInput = document.getElementById('trackIssueIdInput');
-    const trackBtn = document.getElementById('btnTrackSearch');
-
-    const doSearch = async () => {
-      const id = trackInput.value.trim();
-      if (!id) {
-        this.showToast('Please enter a Ticket ID (e.g., CIV-2026-1001)', 'error');
-        return;
-      }
-      try {
-        const issue = await CivicApi.getIssue(id);
-        this.renderTrackerIssue(issue);
-        this.showToast(`Ticket ${id} found`, 'success');
-      } catch (e) {
-        this.showToast(`Ticket not found: ${id}`, 'error');
-      }
-    };
-
-    if (trackBtn) trackBtn.addEventListener('click', doSearch);
-    if (trackInput) {
-      trackInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          doSearch();
-        }
-      });
-    }
+    [['trackIssueIdInput', 'btnTrackSearch'], ['trackPageIssueIdInput', 'btnTrackPageSearch']].forEach(([inputId, buttonId]) => {
+      const input = document.getElementById(inputId);
+      const button = document.getElementById(buttonId);
+      const doSearch = async () => {
+        const id = input.value.trim();
+        if (!id) { this.showToast('Please enter a ticket ID.', 'error'); return; }
+        try {
+          const issue = await CivicApi.getIssue(id);
+          this.renderTrackerIssue(issue);
+          this.showToast(`Ticket ${id} found`, 'success');
+        } catch (e) { this.showToast(`Ticket not found: ${id}`, 'error'); }
+      };
+      if (button) button.addEventListener('click', doSearch);
+      if (input) input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); doSearch(); } });
+    });
   },
 
   renderTrackerIssue(issue) {
     this.currentTrackedIssue = issue;
-    const container = document.getElementById('trackerResultsContainer');
-    if (!container) return;
+    const containers = [document.getElementById('trackerResultsContainer'), document.getElementById('trackerPageResultsContainer')].filter(Boolean);
+    if (!containers.length) return;
 
     if (!issue) {
-      container.innerHTML = `<p class="panel-desc" style="text-align: center; padding: 2rem 0;">Enter a Ticket ID above to track live progress.</p>`;
+      containers.forEach(container => { container.innerHTML = `<p class="panel-desc" style="text-align: center; padding: 2rem 0;">Enter a Ticket ID above to track live progress.</p>`; });
       return;
     }
 
@@ -507,11 +521,10 @@ const App = {
 
     // Build timeline steps
     const steps = [
-      { key: 'REPORTED', title: '1. Incident Reported' },
-      { key: 'TRIAGED', title: '2. Triaged & Assigned' },
-      { key: 'IN_PROGRESS', title: '3. Field Action In Progress' },
-      { key: 'RESOLVED', title: '4. Issue Resolved' },
-      { key: 'CLOSED', title: '5. Case Closed' }
+      { key: 'REPORTED', title: '1. Submitted' },
+      { key: 'TRIAGED', title: '2. Assigned' },
+      { key: 'IN_PROGRESS', title: '3. In Progress' },
+      { key: 'RESOLVED', title: '4. Resolved' }
     ];
 
     const currentOrder = this.getStatusOrder(issue.status);
@@ -546,7 +559,7 @@ const App = {
       `;
     });
 
-    container.innerHTML = `
+    const trackerMarkup = `
       <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 1.25rem; margin-bottom: 1.25rem;">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
           <div>
@@ -585,6 +598,7 @@ const App = {
         ${stepperHtml}
       </div>
     `;
+    containers.forEach(container => { container.innerHTML = trackerMarkup; });
   },
 
   getStatusOrder(status) {
@@ -593,7 +607,8 @@ const App = {
       case 'TRIAGED': return 2;
       case 'IN_PROGRESS': return 3;
       case 'RESOLVED': return 4;
-      case 'CLOSED': return 5;
+      case 'CLOSED': return 4;
+      case 'ESCALATED': return 3;
       default: return 1;
     }
   },
@@ -722,28 +737,74 @@ const App = {
   renderGisRadarPins(issues) {
     const radarContainer = document.getElementById('gisRadarPins');
     if (!radarContainer) return;
+    if (!window.L) { radarContainer.innerHTML = '<p style="padding:1rem">Map library unavailable. Check network access.</p>'; return; }
+    if (!this.leafletMap) {
+      this.leafletMap = L.map(radarContainer).setView([28.6139, 77.2090], 12);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(this.leafletMap);
+      this.leafletMarkers = L.layerGroup().addTo(this.leafletMap);
+    }
+    this.leafletMap.invalidateSize();
+    this.leafletMarkers.clearLayers();
+    if (this.leafletHeat) this.leafletMap.removeLayer(this.leafletHeat);
+    const valid = (issues || []).filter(i => Number.isFinite(Number(i.latitude)) && Number.isFinite(Number(i.longitude)) && (Number(i.latitude) || Number(i.longitude)));
+    const density = new Map();
+    valid.forEach(issue => {
+      const key = `${Number(issue.latitude).toFixed(4)},${Number(issue.longitude).toFixed(4)}`;
+      density.set(key, (density.get(key) || 0) + 1);
+      L.marker([issue.latitude, issue.longitude]).bindPopup(`<strong>${issue.id}</strong><br>${issue.title}<br>${issue.statusLabel || issue.status}`).addTo(this.leafletMarkers);
+    });
+    const heatPoints = valid.map(issue => {
+      const key = `${Number(issue.latitude).toFixed(4)},${Number(issue.longitude).toFixed(4)}`;
+      return [Number(issue.latitude), Number(issue.longitude), Math.min(1, 0.35 + density.get(key) * 0.2)];
+    });
+    if (L.heatLayer) this.leafletHeat = L.heatLayer(heatPoints, { radius: 34, blur: 24, maxZoom: 16, gradient: { 0.25: '#22d3ee', 0.55: '#facc15', 0.8: '#fb923c', 1: '#ef4444' } }).addTo(this.leafletMap);
+  },
 
-    radarContainer.innerHTML = issues.slice(0, 8).map((issue, idx) => {
-      // Pseudo positions across radar circle
-      const angle = (idx / Math.min(issues.length, 8)) * 2 * Math.PI;
-      const radius = 35 + (idx % 3) * 12; // percent
-      const x = 50 + radius * Math.cos(angle);
-      const y = 50 + radius * Math.sin(angle);
+  bindOfficerDashboard() {
+    const select = document.getElementById('officerWardSelect');
+    if (select) select.addEventListener('change', () => this.loadOfficerTasks());
+  },
 
-      const color = issue.priority === 'CRITICAL' ? 'var(--rose-500)' :
-                    issue.priority === 'HIGH' ? 'var(--amber-500)' : 'var(--cyan-400)';
+  async loadOfficerTasks() {
+    const container = document.getElementById('officerTasksContainer');
+    if (!container) return;
+    container.innerHTML = '<p class="panel-desc">Loading ward assignments...</p>';
+    try {
+      const ward = document.getElementById('officerWardSelect')?.value || 'ALL';
+      const issues = await CivicApi.getOfficerIssues(ward);
+      if (!issues.length) { container.innerHTML = '<p class="panel-desc">No active tasks in this ward.</p>'; return; }
+      container.innerHTML = issues.map(issue => `
+        <article class="issue-card">
+          <div class="issue-card-body">
+            <div class="issue-card-badges"><span class="badge badge-status">${issue.statusLabel || issue.status}</span><span class="badge badge-medium">${issue.priorityLabel || issue.priority}</span></div>
+            <h3 class="issue-card-title">${issue.id}: ${issue.title}</h3>
+            <p class="issue-card-desc">${issue.description || ''}</p>
+            <div class="issue-card-meta"><div>${issue.ward || 'Unassigned ward'}</div><div>Assigned: ${issue.assignedOfficer || 'Officer not assigned'}</div></div>
+            <label class="form-label" for="resolutionPhoto-${issue.id}">After-resolution photo (required)</label>
+            <input class="form-control" type="file" id="resolutionPhoto-${issue.id}" accept="image/jpeg,image/png,image/webp" />
+            <button class="btn-card-action" style="margin-top:.75rem" onclick="App.resolveOfficerIssue('${issue.id}')">Upload photo & resolve</button>
+          </div>
+        </article>`).join('');
+    } catch (e) { container.innerHTML = `<p class="panel-desc">Could not load tasks: ${e.message}</p>`; }
+  },
 
-      return `
-        <div class="radar-pin" style="position: absolute; left: ${x}%; top: ${y}%; transform: translate(-50%, -50%); cursor: pointer; z-index: 5;"
-             onclick="App.openIssueDetailsModal('${issue.id}')"
-             title="${issue.id}: ${issue.title}">
-          <div style="width: 14px; height: 14px; background: ${color}; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 10px ${color};"></div>
-          <span style="background: rgba(0,0,0,0.85); color: #fff; font-size: 0.65rem; padding: 2px 5px; border-radius: 4px; position: absolute; top: -18px; left: 50%; transform: translateX(-50%); white-space: nowrap;">
-            ${issue.id}
-          </span>
-        </div>
-      `;
-    }).join('');
+  async resolveOfficerIssue(issueId) {
+    const input = document.getElementById(`resolutionPhoto-${issueId}`);
+    const photo = input?.files?.[0];
+    if (!photo) { this.showToast('Choose an after-resolution photo before closing this ticket.', 'error'); return; }
+    const body = new FormData();
+    body.append('status', 'RESOLVED');
+    body.append('actor', 'Field Officer');
+    body.append('notes', 'Resolved in field; after-resolution photo attached.');
+    body.append('photo', photo);
+    try {
+      await CivicApi.updateStatus(issueId, body);
+      this.showToast(`${issueId} resolved with photo evidence.`, 'success');
+      await this.loadOfficerTasks();
+      await this.loadLiveFeed();
+    } catch (e) { this.showToast(`Could not resolve ticket: ${e.message}`, 'error'); }
   },
 
   renderQuickPicks(issues) {
@@ -869,6 +930,7 @@ const App = {
                 <option value="IN_PROGRESS" ${issue.status === 'IN_PROGRESS' ? 'selected' : ''}>IN PROGRESS</option>
                 <option value="RESOLVED" ${issue.status === 'RESOLVED' ? 'selected' : ''}>RESOLVED</option>
                 <option value="CLOSED" ${issue.status === 'CLOSED' ? 'selected' : ''}>CLOSED</option>
+                <option value="ESCALATED" ${issue.status === 'ESCALATED' ? 'selected' : ''}>ESCALATED</option>
               </select>
             </td>
             <td>
@@ -966,6 +1028,7 @@ const App = {
           <option value="IN_PROGRESS" ${issue.status === 'IN_PROGRESS' ? 'selected' : ''}>IN PROGRESS</option>
           <option value="RESOLVED" ${issue.status === 'RESOLVED' ? 'selected' : ''}>RESOLVED</option>
           <option value="CLOSED" ${issue.status === 'CLOSED' ? 'selected' : ''}>CLOSED</option>
+          <option value="ESCALATED" ${issue.status === 'ESCALATED' ? 'selected' : ''}>ESCALATED</option>
         </select>
       </div>
 

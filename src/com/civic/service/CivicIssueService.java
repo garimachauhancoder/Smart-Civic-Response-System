@@ -10,6 +10,12 @@ import java.util.*;
 
 public class CivicIssueService {
 
+    public static class IssueCreationResult {
+        public final CivicIssue issue;
+        public final boolean duplicate;
+        IssueCreationResult(CivicIssue issue, boolean duplicate) { this.issue = issue; this.duplicate = duplicate; }
+    }
+
     private final IssueRepository repository;
     private final SmartTriageService triageService;
     private final List<Department> departments;
@@ -58,6 +64,10 @@ public class CivicIssueService {
     }
 
     public CivicIssue createIssue(Map<String, Object> payload) {
+        return createIssueWithResult(payload).issue;
+    }
+
+    public synchronized IssueCreationResult createIssueWithResult(Map<String, Object> payload) {
         String title = (String) payload.get("title");
         String description = (String) payload.get("description");
         String category = (String) payload.get("category");
@@ -70,12 +80,28 @@ public class CivicIssueService {
             category = triage.category;
         }
 
+        double latitude = number(payload.get("latitude"));
+        double longitude = number(payload.get("longitude"));
+        if (validCoordinate(latitude, longitude)) {
+            for (CivicIssue candidate : repository.getAll()) {
+                if (!isActive(candidate.getStatus()) || candidate.getLatitude() == 0 && candidate.getLongitude() == 0) continue;
+                if (category.equalsIgnoreCase(candidate.getCategory()) &&
+                        distanceMeters(latitude, longitude, candidate.getLatitude(), candidate.getLongitude()) <= 50) {
+                    CivicIssue upvoted = upvote(candidate.getId());
+                    return new IssueCreationResult(upvoted, true);
+                }
+            }
+        }
+
         PriorityLevel priority;
         if (priorityStr != null && !priorityStr.equalsIgnoreCase("AUTO") && !priorityStr.trim().isEmpty()) {
             priority = PriorityLevel.fromString(priorityStr);
         } else {
             priority = triage.priority;
         }
+        PriorityLevel calculatedPriority = triageService.priorityForScore(
+                triageService.dynamicSeverityScore(category, 0, 0));
+        if (severityRank(calculatedPriority) > severityRank(priority)) priority = calculatedPriority;
 
         String department = (String) payload.get("department");
         if (department == null || department.trim().isEmpty()) {
@@ -104,6 +130,8 @@ public class CivicIssueService {
         issue.setReporterPhone((String) payload.get("reporterPhone"));
         issue.setReporterEmail((String) payload.get("reporterEmail"));
         issue.setPhotoUrl((String) payload.get("photoUrl"));
+        issue.setFraudFlag(Boolean.TRUE.equals(payload.get("fraudFlag")));
+        issue.setFraudReason((String) payload.get("fraudReason"));
 
         // Add timeline events
         String reporter = issue.getReporterName() != null && !issue.getReporterName().isEmpty()
@@ -111,14 +139,107 @@ public class CivicIssueService {
         issue.addTimelineEvent("REPORTED", reporter, "Civic Issue Reported", "Ticket created and registered in municipal registry.");
         issue.addTimelineEvent("TRIAGED", "Smart Civic AI Dispatch", "Automated Triage Completed", triage.rationale);
 
-        return repository.save(issue);
+        return new IssueCreationResult(repository.save(issue), false);
     }
 
-    public CivicIssue updateStatus(String issueId, String newStatusStr, String actor, String notes, String officer, String resolutionPhotoUrl) {
+    public List<CivicIssue> getIssuesForWard(String ward) {
+        List<CivicIssue> result = new ArrayList<>();
+        for (CivicIssue issue : repository.getAll()) {
+            if (ward == null || ward.isBlank() || "ALL".equalsIgnoreCase(ward) || ward.equalsIgnoreCase(issue.getWard())) {
+                if (isActive(issue.getStatus())) result.add(issue);
+            }
+        }
+        return result;
+    }
+
+    public List<Map<String, Object>> getWardReport() {
+        Map<String, int[]> counts = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        for (CivicIssue issue : repository.getAll()) {
+            String ward = issue.getWard() == null || issue.getWard().isBlank() ? "Unassigned" : issue.getWard();
+            int[] count = counts.computeIfAbsent(ward, ignored -> new int[2]);
+            if (issue.getStatus() == IssueStatus.RESOLVED || issue.getStatus() == IssueStatus.CLOSED) count[0]++;
+            else count[1]++;
+        }
+        List<Map<String, Object>> rows = new ArrayList<>();
+        counts.forEach((ward, count) -> {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("ward", ward); row.put("totalResolved", count[0]); row.put("pendingCount", count[1]);
+            rows.add(row);
+        });
+        return rows;
+    }
+
+    public synchronized int refreshDynamicSeverity() {
+        int changed = 0;
+        Instant now = Instant.now();
+        for (CivicIssue issue : repository.getAll()) {
+            if (!isActive(issue.getStatus())) continue;
+            try {
+                double age = Duration.between(Instant.parse(issue.getCreatedAt()), now).toMinutes() / 60.0;
+                double score = triageService.dynamicSeverityScore(issue.getCategory(), issue.getUpvotes(), age);
+                PriorityLevel calculated = triageService.priorityForScore(score);
+                if (severityRank(calculated) > severityRank(issue.getPriority())) {
+                    issue.setPriority(calculated); issue.setSlaHours(calculated.getSlaHours());
+                    issue.addTimelineEvent(issue.getStatus().name(), "Dynamic Severity Engine",
+                            "Priority increased to " + calculated.name(), String.format("Severity score %.1f (category + endorsements + age).", score));
+                    repository.update(issue); changed++;
+                }
+            } catch (Exception ignored) { }
+        }
+        return changed;
+    }
+
+    private boolean isActive(IssueStatus status) {
+        return status != null && status != IssueStatus.RESOLVED && status != IssueStatus.CLOSED;
+    }
+    private int severityRank(PriorityLevel p) {
+        if (p == PriorityLevel.CRITICAL) return 4;
+        if (p == PriorityLevel.HIGH) return 3;
+        if (p == PriorityLevel.MEDIUM) return 2;
+        return 1;
+    }
+    private double number(Object value) {
+        if (value instanceof Number) return ((Number) value).doubleValue();
+        try { return value == null ? 0 : Double.parseDouble(value.toString()); } catch (Exception e) { return 0; }
+    }
+    private boolean validCoordinate(double lat, double lon) { return lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180 && (lat != 0 || lon != 0); }
+    private double distanceMeters(double lat1, double lon1, double lat2, double lon2) {
+        double p1=Math.toRadians(lat1), p2=Math.toRadians(lat2), dp=Math.toRadians(lat2-lat1), dl=Math.toRadians(lon2-lon1);
+        double a=Math.sin(dp/2)*Math.sin(dp/2)+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)*Math.sin(dl/2);
+        return 6371000*2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+
+    public synchronized int escalateOverdueIssues() {
+        int escalated = 0;
+        Instant now = Instant.now();
+        for (CivicIssue issue : repository.getAll()) {
+            IssueStatus status = issue.getStatus();
+            if (status != IssueStatus.PENDING && status != IssueStatus.REPORTED &&
+                    status != IssueStatus.TRIAGED && status != IssueStatus.IN_PROGRESS) continue;
+            try {
+                Instant created = Instant.parse(issue.getCreatedAt());
+                int thresholdHours = issue.getSlaHours() > 0 ? issue.getSlaHours() : 48;
+                if (Duration.between(created, now).toHours() < thresholdHours) continue;
+                issue.setStatus(IssueStatus.ESCALATED);
+                issue.addTimelineEvent(IssueStatus.ESCALATED.name(), "SLA Escalation Worker",
+                        "Automatically escalated after SLA breach", "Issue exceeded its " + thresholdHours + " hour SLA.");
+                repository.update(issue);
+                escalated++;
+            } catch (Exception ignored) { }
+        }
+        return escalated;
+    }
+
+    public synchronized CivicIssue updateStatus(String issueId, String newStatusStr, String actor, String notes, String officer, String resolutionPhotoUrl) {
         CivicIssue issue = repository.getById(issueId);
         if (issue == null) return null;
 
         IssueStatus newStatus = IssueStatus.fromString(newStatusStr);
+        if ((newStatus == IssueStatus.RESOLVED || newStatus == IssueStatus.CLOSED) &&
+                (resolutionPhotoUrl == null || resolutionPhotoUrl.isBlank()) &&
+                (issue.getResolutionPhotoUrl() == null || issue.getResolutionPhotoUrl().isBlank())) {
+            throw new IllegalArgumentException("An after-resolution photo is required before resolving this issue.");
+        }
         issue.setStatus(newStatus);
 
         if (officer != null && !officer.trim().isEmpty()) {
@@ -146,7 +267,7 @@ public class CivicIssueService {
         return repository.update(issue);
     }
 
-    public CivicIssue assignDepartment(String issueId, String department, String actor, String notes) {
+    public synchronized CivicIssue assignDepartment(String issueId, String department, String actor, String notes) {
         CivicIssue issue = repository.getById(issueId);
         if (issue == null) return null;
 
@@ -159,11 +280,22 @@ public class CivicIssueService {
         return repository.update(issue);
     }
 
-    public CivicIssue upvote(String issueId) {
+    public synchronized CivicIssue upvote(String issueId) {
         CivicIssue issue = repository.getById(issueId);
         if (issue == null) return null;
 
         int newVotes = issue.incrementUpvote();
+
+        double ageHours = 0;
+        try { ageHours = Duration.between(Instant.parse(issue.getCreatedAt()), Instant.now()).toMinutes() / 60.0; } catch (Exception ignored) { }
+        PriorityLevel dynamic = triageService.priorityForScore(
+                triageService.dynamicSeverityScore(issue.getCategory(), newVotes, ageHours));
+        if (severityRank(dynamic) > severityRank(issue.getPriority())) {
+            issue.setPriority(dynamic);
+            issue.setSlaHours(dynamic.getSlaHours());
+            issue.addTimelineEvent(issue.getStatus().name(), "Dynamic Severity Engine",
+                    "Priority increased to " + dynamic.name(), "Severity score increased with community endorsements and issue age.");
+        }
 
         // Community escalation threshold
         if (newVotes >= 25 && issue.getPriority() == PriorityLevel.MEDIUM) {

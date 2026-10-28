@@ -24,6 +24,8 @@ public class CivicIssue {
     private String reporterEmail;
     private String photoUrl;
     private String resolutionPhotoUrl;
+    private boolean fraudFlag;
+    private String fraudReason;
     private int upvotes;
     private String createdAt;
     private String updatedAt;
@@ -96,6 +98,10 @@ public class CivicIssue {
 
     public String getResolutionPhotoUrl() { return resolutionPhotoUrl; }
     public void setResolutionPhotoUrl(String resolutionPhotoUrl) { this.resolutionPhotoUrl = resolutionPhotoUrl; }
+    public boolean isFraudFlag() { return fraudFlag; }
+    public void setFraudFlag(boolean fraudFlag) { this.fraudFlag = fraudFlag; }
+    public String getFraudReason() { return fraudReason; }
+    public void setFraudReason(String fraudReason) { this.fraudReason = fraudReason; }
 
     public int getUpvotes() { return upvotes; }
     public void setUpvotes(int upvotes) { this.upvotes = upvotes; }
